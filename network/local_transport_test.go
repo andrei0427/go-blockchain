@@ -7,8 +7,8 @@ import (
 )
 
 func TestConnect(t *testing.T) {
-	tra := NewLocalTransport("a")
-	trb := NewLocalTransport("b")
+	tra := NewLocalTransport("a").(*LocalTransport)
+	trb := NewLocalTransport("b").(*LocalTransport)
 
 	tra.Connect(trb)
 	trb.Connect(tra)
