@@ -14,13 +14,13 @@ type PrivateKey struct {
 	key *ecdsa.PrivateKey
 }
 
-func NewPrivateKey() *PrivateKey {
+func NewPrivateKey() PrivateKey {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		panic(err)
 	}
 
-	return &PrivateKey{
+	return PrivateKey{
 		key: key,
 	}
 }

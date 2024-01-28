@@ -1,64 +1,46 @@
 package core
 
 import (
-	"bytes"
 	"testing"
 	"time"
 
+	"github.com/andrei0427/go-blockchain/crypto"
 	"github.com/andrei0427/go-blockchain/types"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHeader_Encode_Decode(t *testing.T) {
-	h := &Header{
-		Version:   1,
-		PrevBlock: types.RandomHash(),
-		Timestamp: time.Now().UnixNano(),
-		Height:    10,
-		Nonce:     42069,
+func randomBlock(height uint32) *Block {
+	header := &Header{
+		Version:       1,
+		PrevBlockHash: types.RandomHash(),
+		Height:        height,
+		Timestamp:     time.Now().UnixNano(),
 	}
 
-	buf := &bytes.Buffer{}
-	assert.Nil(t, h.EncodeBinary(buf))
+	tx := Transaction{
+		Data: []byte("foo"),
+	}
 
-	hDecode := &Header{}
-	assert.Nil(t, hDecode.DecodeBinary(buf))
-	assert.Equal(t, h, hDecode)
+	return NewBlock(header, []Transaction{tx})
 }
 
-func TestBlock_Encode_Decode(t *testing.T) {
-	block := &Block{
-		Header: Header{
-			Version:   1,
-			PrevBlock: types.RandomHash(),
-			Timestamp: time.Now().UnixNano(),
-			Height:    10,
-			Nonce:     42069,
-		},
-		Transactions: nil,
-	}
+func TestSignBlock(t *testing.T) {
+	pk := crypto.NewPrivateKey()
+	b := randomBlock(0)
 
-	buf := &bytes.Buffer{}
-	assert.Nil(t, block.EncodeBinary(buf))
-
-	hDecode := &Block{}
-	assert.Nil(t, hDecode.DecodeBinary(buf))
-	assert.Equal(t, block, hDecode)
-
+	assert.Nil(t, b.Sign(pk))
+	assert.NotNil(t, b.Signature)
 }
 
-func TestBlockHash(t *testing.T) {
-	b := &Block{
-		Header: Header{
-			Version:   1,
-			PrevBlock: types.RandomHash(),
-			Timestamp: time.Now().UnixNano(),
-			Height:    10,
-			Nonce:     42069,
-		},
-		Transactions: nil,
-	}
+func TestVerifyBlock(t *testing.T) {
+	pk := crypto.NewPrivateKey()
+	b := randomBlock(0)
 
-	h := b.Hash()
-	assert.False(t, h.IsZero())
+	assert.Nil(t, b.Sign(pk))
+	assert.Nil(t, b.Verify())
+
+	otherPk := crypto.NewPrivateKey()
+	b.Validator = *otherPk.NewPublicKey()
+
+	assert.NotNil(t, b.Verify())
 }
