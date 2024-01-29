@@ -8,7 +8,7 @@ import (
 
 func TestKeyPair_Sign_Verify_Valid(t *testing.T) {
 	pk := NewPrivateKey()
-	pubKey := pk.NewPublicKey()
+	pubKey := pk.PublicKey()
 	msg := []byte("hello world")
 
 	sig, err := pk.Sign(msg)
@@ -19,14 +19,14 @@ func TestKeyPair_Sign_Verify_Valid(t *testing.T) {
 
 func TestKeyPair_Sign_Verify_Invalid(t *testing.T) {
 	pk := NewPrivateKey()
-	pubKey := pk.NewPublicKey()
+	pubKey := pk.PublicKey()
 	msg := []byte("hello world")
 
 	sig, err := pk.Sign(msg)
 	assert.Nil(t, err)
 
 	otherPk := NewPrivateKey()
-	otherPubKey := otherPk.NewPublicKey()
+	otherPubKey := otherPk.PublicKey()
 
 	assert.False(t, sig.Verify(*otherPubKey, msg))
 	assert.False(t, sig.Verify(*pubKey, []byte("world hello")))

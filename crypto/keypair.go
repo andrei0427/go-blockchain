@@ -37,7 +37,7 @@ func (k *PrivateKey) Sign(data []byte) (*Signature, error) {
 	}, nil
 }
 
-func (pk *PrivateKey) NewPublicKey() *PublicKey {
+func (pk *PrivateKey) PublicKey() *PublicKey {
 	return &PublicKey{
 		key: &pk.key.PublicKey,
 	}
