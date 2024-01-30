@@ -7,19 +7,27 @@ import (
 	"github.com/andrei0427/go-blockchain/types"
 )
 
-type Transaction struct {
-	Data []byte
-
-	From      crypto.PublicKey
+type TransactionWithoutPublicKey struct {
+	Data      []byte
 	Signature *crypto.Signature
 
 	// cached
 	hash types.Hash
+
+	// timestamp
+	firstSeenOn int64
+}
+
+type Transaction struct {
+	TransactionWithoutPublicKey
+	From crypto.PublicKey
 }
 
 func NewTransaction(data []byte) *Transaction {
 	return &Transaction{
-		Data: data,
+		TransactionWithoutPublicKey: TransactionWithoutPublicKey{
+			Data: data,
+		},
 	}
 }
 
@@ -53,4 +61,20 @@ func (tx *Transaction) Verify() error {
 	}
 
 	return nil
+}
+
+func (tx *Transaction) Decode(dec Decoder[*Transaction]) error {
+	return dec.Decode(tx)
+}
+
+func (tx *Transaction) Encode(enc Encoder[*Transaction]) error {
+	return enc.Encode(tx)
+}
+
+func (tx *Transaction) SetFirstSeenOn(t int64) {
+	tx.firstSeenOn = t
+}
+
+func (tx *Transaction) FirstSeenOn() int64 {
+	return tx.firstSeenOn
 }
