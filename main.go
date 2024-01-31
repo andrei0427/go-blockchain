@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"math/rand"
+	"strconv"
 	"time"
 
+	"github.com/andrei0427/go-blockchain/core"
+	"github.com/andrei0427/go-blockchain/crypto"
 	"github.com/andrei0427/go-blockchain/network"
 )
 
@@ -15,7 +20,7 @@ func main() {
 
 	go func() {
 		for {
-			trRemote.SendMessage(trLocal.Addr(), []byte("hello world"))
+			sendTransaction(trRemote, trLocal.Addr())
 			time.Sleep(1 * time.Second)
 		}
 	}()
@@ -29,4 +34,19 @@ func main() {
 
 	s := network.NewServer(opts)
 	s.Start()
+}
+
+func sendTransaction(tr network.Transport, to network.NetAddr) error {
+	pk := crypto.NewPrivateKey()
+	data := []byte(strconv.FormatInt(int64(rand.Intn(1000)), 10))
+	tx := core.NewTransaction(data)
+	tx.Sign(pk)
+
+	buf := &bytes.Buffer{}
+	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+		return err
+	}
+
+	msg := network.NewMessage(network.MessageTypeTx, buf.Bytes())
+	return tr.SendMessage(to, msg.Bytes())
 }

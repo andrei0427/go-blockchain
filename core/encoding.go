@@ -50,12 +50,14 @@ func (e *GobTxEncoder) Encode(tx *Transaction) error {
 }
 
 type GobTxDecoder struct {
-	r io.Reader
+	r     io.Reader
+	Curve elliptic.Curve
 }
 
 func NewGobTxDecoder(r io.Reader) *GobTxDecoder {
 	return &GobTxDecoder{
-		r: r,
+		r:     r,
+		Curve: elliptic.P256(),
 	}
 }
 
@@ -69,7 +71,7 @@ func (d *GobTxDecoder) Decode(tx *Transaction) error {
 	tx.TransactionWithoutPublicKey = decTx.TransactionWithoutPublicKey
 	tx.From = crypto.PublicKey{
 		Key: ecdsa.PublicKey{
-			Curve: elliptic.P256(),
+			Curve: d.Curve,
 			X:     decTx.PublicKey.X,
 			Y:     decTx.PublicKey.Y,
 		},
