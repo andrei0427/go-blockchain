@@ -1,6 +1,7 @@
 package network
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
@@ -12,10 +13,11 @@ import (
 var defaultBlockTime = 5 * time.Second
 
 type ServerOpts struct {
-	RPCHandler RPCHandler
-	Transports []Transport
-	BlockTime  time.Duration
-	PrivateKey *crypto.PrivateKey
+	RPCDecodeFunc RPCDecodeFunc
+	RPCProcessor  RPCProcessor
+	Transports    []Transport
+	BlockTime     time.Duration
+	PrivateKey    *crypto.PrivateKey
 }
 
 type Server struct {
@@ -28,9 +30,12 @@ type Server struct {
 }
 
 func NewServer(opts ServerOpts) *Server {
-
 	if opts.BlockTime == time.Duration(0) {
 		opts.BlockTime = defaultBlockTime
+	}
+
+	if opts.RPCDecodeFunc == nil {
+		opts.RPCDecodeFunc = DefaultRPCDecodeFunc
 	}
 
 	s := &Server{
@@ -42,8 +47,9 @@ func NewServer(opts ServerOpts) *Server {
 		quitCh:      make(chan struct{}, 1),
 	}
 
-	if s.RPCHandler == nil {
-		s.RPCHandler = NewDefaultRPCHandler(s)
+	if opts.RPCProcessor == nil {
+		// Assume server is default processor
+		s.RPCProcessor = s
 	}
 
 	return s
@@ -58,7 +64,12 @@ free:
 	for {
 		select {
 		case rpc := <-s.rpcCh:
-			if err := s.RPCHandler.HandleRPC(rpc); err != nil {
+			msg, err := s.RPCDecodeFunc(rpc)
+			if err != nil {
+				logrus.Error(err)
+			}
+
+			if err := s.RPCProcessor.ProcessMessage(msg); err != nil {
 				logrus.Error(err)
 			}
 
@@ -76,7 +87,26 @@ free:
 	fmt.Println("Server shutting down")
 }
 
-func (s *Server) ProcessTransaction(from NetAddr, tx *core.Transaction) error {
+func (s *Server) ProcessMessage(msg *DecodedMessage) error {
+	switch t := msg.Data.(type) {
+	case *core.Transaction:
+		return s.processTransaction(t)
+	}
+
+	return nil
+}
+
+func (s *Server) broadcast(data []byte) error {
+	for _, tr := range s.Transports {
+		if err := tr.Broadcast(data); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Server) processTransaction(tx *core.Transaction) error {
 	hash := tx.Hash(core.TxHasher{})
 
 	if s.memPool.Has(hash) {
@@ -98,9 +128,19 @@ func (s *Server) ProcessTransaction(from NetAddr, tx *core.Transaction) error {
 		"poolSize": s.memPool.Len(),
 	}).Info("adding new tx to pool")
 
-	// TODO: Broadcast to other peers
+	go s.broadcastTx(tx)
 
 	return s.memPool.Add(tx)
+}
+
+func (s *Server) broadcastTx(tx *core.Transaction) error {
+	buf := &bytes.Buffer{}
+	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+		return err
+	}
+
+	msg := NewMessage(MessageTypeTx, buf.Bytes())
+	return s.broadcast(msg.Bytes())
 }
 
 func (s *Server) createNewBlock() error {
@@ -114,8 +154,6 @@ func (s *Server) initTransports() {
 			for rpc := range tr.Consume() {
 				s.rpcCh <- rpc
 			}
-
 		}(tr)
-
 	}
 }

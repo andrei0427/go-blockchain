@@ -9,6 +9,7 @@ import (
 	"github.com/andrei0427/go-blockchain/core"
 	"github.com/andrei0427/go-blockchain/crypto"
 	"github.com/andrei0427/go-blockchain/network"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -20,7 +21,10 @@ func main() {
 
 	go func() {
 		for {
-			sendTransaction(trRemote, trLocal.Addr())
+			if err := sendTransaction(trRemote, trLocal.Addr()); err != nil {
+				logrus.Error(err)
+			}
+
 			time.Sleep(1 * time.Second)
 		}
 	}()
@@ -28,7 +32,6 @@ func main() {
 	opts := network.ServerOpts{
 		Transports: []network.Transport{
 			trLocal,
-			trRemote,
 		},
 	}
 

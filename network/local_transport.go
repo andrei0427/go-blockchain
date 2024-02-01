@@ -25,6 +25,16 @@ func (t *LocalTransport) Consume() <-chan RPC {
 	return t.consumeCh
 }
 
+func (t *LocalTransport) Broadcast(data []byte) error {
+	for _, peer := range t.peers {
+		if err := t.SendMessage(peer.addr, data); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (t *LocalTransport) Connect(tr Transport) error {
 	trans := tr.(*LocalTransport)
 	t.lock.Lock()
