@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
@@ -28,6 +29,18 @@ func TestVerifyBlock(t *testing.T) {
 	b.Validator = *otherPk.PublicKey()
 
 	assert.NotNil(t, b.Verify())
+}
+
+func TestEncodeDecodeBlock(t *testing.T) {
+	b := randomBlock(t, 1, types.Hash{})
+	buf := &bytes.Buffer{}
+
+	assert.Nil(t, b.Encode(NewGobBlockEncoder(buf)))
+
+	decoded := new(Block)
+	assert.Nil(t, decoded.Decode(NewGobBlockDecoder(buf)))
+
+	assert.Equal(t, b, decoded)
 }
 
 func randomBlock(t *testing.T, height uint32, prevBlockHash types.Hash) *Block {

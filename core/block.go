@@ -27,20 +27,25 @@ func (h *Header) Bytes() []byte {
 	return buf.Bytes()
 }
 
-type Block struct {
+type BlockWithoutValidator struct {
 	*Header
 	Transactions []*Transaction
-	Validator    crypto.PublicKey
 	Signature    *crypto.Signature
 
 	// Cached version of header-hash
 	hash types.Hash
 }
+type Block struct {
+	BlockWithoutValidator
+	Validator crypto.PublicKey
+}
 
 func NewBlock(h *Header, tx []*Transaction) (*Block, error) {
 	return &Block{
-		Header:       h,
-		Transactions: tx,
+		BlockWithoutValidator: BlockWithoutValidator{
+			Header:       h,
+			Transactions: tx,
+		},
 	}, nil
 }
 
