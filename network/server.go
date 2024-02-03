@@ -2,17 +2,20 @@ package network
 
 import (
 	"bytes"
-	"fmt"
+	"os"
 	"time"
 
 	"github.com/andrei0427/go-blockchain/core"
 	"github.com/andrei0427/go-blockchain/crypto"
-	"github.com/sirupsen/logrus"
+	"github.com/andrei0427/go-blockchain/types"
+	"github.com/go-kit/log"
 )
 
 var defaultBlockTime = 5 * time.Second
 
 type ServerOpts struct {
+	ID            string
+	Logger        log.Logger
 	RPCDecodeFunc RPCDecodeFunc
 	RPCProcessor  RPCProcessor
 	Transports    []Transport
@@ -22,14 +25,14 @@ type ServerOpts struct {
 
 type Server struct {
 	ServerOpts
-	blockTime   time.Duration
-	memPool     *TxPool
+	mempool     *TxPool
+	chain       *core.Blockchain
 	isValidator bool
 	rpcCh       chan RPC
 	quitCh      chan struct{}
 }
 
-func NewServer(opts ServerOpts) *Server {
+func NewServer(opts ServerOpts) (*Server, error) {
 	if opts.BlockTime == time.Duration(0) {
 		opts.BlockTime = defaultBlockTime
 	}
@@ -38,10 +41,25 @@ func NewServer(opts ServerOpts) *Server {
 		opts.RPCDecodeFunc = DefaultRPCDecodeFunc
 	}
 
+	if opts.Logger == nil {
+		opts.Logger = log.NewLogfmtLogger(os.Stderr)
+		opts.Logger = log.With(opts.Logger, "10", opts.ID)
+	}
+
+	genesis, err := genesisBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	chain, err := core.NewBlockchain(opts.Logger, genesis)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &Server{
 		ServerOpts:  opts,
-		blockTime:   opts.BlockTime,
-		memPool:     NewTxPool(),
+		mempool:     NewTxPool(1000),
+		chain:       chain,
 		isValidator: opts.PrivateKey != nil,
 		rpcCh:       make(chan RPC),
 		quitCh:      make(chan struct{}, 1),
@@ -52,13 +70,16 @@ func NewServer(opts ServerOpts) *Server {
 		s.RPCProcessor = s
 	}
 
-	return s
+	if s.isValidator {
+		go s.validatorLoop()
+	}
+
+	return s, nil
 
 }
 
 func (s *Server) Start() {
 	s.initTransports()
-	ticker := time.NewTicker(s.blockTime)
 
 free:
 	for {
@@ -66,25 +87,34 @@ free:
 		case rpc := <-s.rpcCh:
 			msg, err := s.RPCDecodeFunc(rpc)
 			if err != nil {
-				logrus.Error(err)
+				s.Logger.Log("error", err)
 			}
 
 			if err := s.RPCProcessor.ProcessMessage(msg); err != nil {
-				logrus.Error(err)
+				s.Logger.Log("error", err)
 			}
 
 		case <-s.quitCh:
 			break free
 
-		case <-ticker.C:
-			if s.isValidator {
-				s.createNewBlock()
-			}
 		}
-
 	}
 
-	fmt.Println("Server shutting down")
+	s.Logger.Log("msg", "server is shutting down")
+}
+
+func (s *Server) validatorLoop() {
+	ticker := time.NewTicker(s.BlockTime)
+
+	s.Logger.Log(
+		"msg", "starting validator loop",
+		"interval", s.BlockTime,
+	)
+
+	for {
+		<-ticker.C
+		s.createNewBlock()
+	}
 }
 
 func (s *Server) ProcessMessage(msg *DecodedMessage) error {
@@ -109,11 +139,7 @@ func (s *Server) broadcast(data []byte) error {
 func (s *Server) processTransaction(tx *core.Transaction) error {
 	hash := tx.Hash(core.TxHasher{})
 
-	if s.memPool.Has(hash) {
-		logrus.WithFields(logrus.Fields{
-			"hash": hash,
-		}).Info("transaction already inserted in pool")
-
+	if s.mempool.Contains(hash) {
 		return nil
 	}
 
@@ -121,16 +147,20 @@ func (s *Server) processTransaction(tx *core.Transaction) error {
 		return err
 	}
 
-	tx.SetFirstSeenOn(time.Now().UnixNano())
-
-	logrus.WithFields(logrus.Fields{
-		"hash":     hash,
-		"poolSize": s.memPool.Len(),
-	}).Info("adding new tx to pool")
+	s.Logger.Log("msg", "adding new tx to pool",
+		"hash", hash,
+		"mempoolPendingTxCount", s.mempool.PendingCount(),
+	)
 
 	go s.broadcastTx(tx)
 
-	return s.memPool.Add(tx)
+	s.mempool.Add(tx)
+	return nil
+}
+
+func (s *Server) broadcastBlock(b *core.Block) error {
+	return nil
+
 }
 
 func (s *Server) broadcastTx(tx *core.Transaction) error {
@@ -143,11 +173,6 @@ func (s *Server) broadcastTx(tx *core.Transaction) error {
 	return s.broadcast(msg.Bytes())
 }
 
-func (s *Server) createNewBlock() error {
-	fmt.Println("creating a new block")
-	return nil
-}
-
 func (s *Server) initTransports() {
 	for _, tr := range s.Transports {
 		go func(tr Transport) {
@@ -156,4 +181,42 @@ func (s *Server) initTransports() {
 			}
 		}(tr)
 	}
+}
+
+func (s *Server) createNewBlock() error {
+	currentHeader, err := s.chain.GetHeader(s.chain.Height())
+	if err != nil {
+		return err
+	}
+
+	// Use all transactions in pool
+	txx := s.mempool.Pending()
+
+	block, err := core.NewBlockFromPrevHeader(currentHeader, txx)
+	if err != nil {
+		return err
+	}
+
+	if err := block.Sign(*s.PrivateKey); err != nil {
+		return err
+	}
+
+	if err := s.chain.AddBlock(block); err != nil {
+		return err
+	}
+
+	s.mempool.ClearPending()
+
+	return nil
+}
+
+func genesisBlock() (*core.Block, error) {
+	header := &core.Header{
+		Version:   1,
+		Height:    0,
+		Timestamp: 000000,
+		DataHash:  types.Hash{},
+	}
+
+	return core.NewBlock(header, nil)
 }

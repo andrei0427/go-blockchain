@@ -49,14 +49,13 @@ func TestTxEncodeDecode(t *testing.T) {
 }
 
 func randomSignedTx(t *testing.T) *Transaction {
-	pk := crypto.NewPrivateKey()
-	tx := &Transaction{
+	privKey := crypto.NewPrivateKey()
+	tx := Transaction{
 		TransactionWithoutPublicKey: TransactionWithoutPublicKey{
 			Data: []byte("foo"),
 		},
 	}
+	assert.Nil(t, tx.Sign(privKey))
 
-	assert.Nil(t, tx.Sign(pk))
-
-	return tx
+	return &tx
 }

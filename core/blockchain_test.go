@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/andrei0427/go-blockchain/types"
+	"github.com/go-kit/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,14 +25,14 @@ func TestAddBlock(t *testing.T) {
 
 	lenBlocks := (1000)
 	for i := 0; i < lenBlocks; i++ {
-		block := randomBlockSigned(t, uint32(i+1), getPrevBlockHash(t, bc, uint32(i+1)))
+		block := randomBlock(t, uint32(i+1), getPrevBlockHash(t, bc, uint32(i+1)))
 		assert.Nil(t, bc.AddBlock(block))
 	}
 
 	assert.Equal(t, bc.Height(), uint32(lenBlocks))
 	assert.Equal(t, len(bc.headers), lenBlocks+1)
 
-	assert.NotNil(t, bc.AddBlock(randomBlockSigned(t, 90, types.Hash{})))
+	assert.NotNil(t, bc.AddBlock(randomBlock(t, 90, types.Hash{})))
 }
 
 func TestGetHeader(t *testing.T) {
@@ -39,7 +40,7 @@ func TestGetHeader(t *testing.T) {
 	lenBlocks := 1000
 
 	for i := 0; i < lenBlocks; i++ {
-		block := randomBlockSigned(t, uint32(i+1), getPrevBlockHash(t, bc, uint32(i+1)))
+		block := randomBlock(t, uint32(i+1), getPrevBlockHash(t, bc, uint32(i+1)))
 		assert.Nil(t, bc.AddBlock(block))
 
 		header, err := bc.GetHeader(block.Height)
@@ -55,12 +56,12 @@ func TestGetHeader(t *testing.T) {
 func TestAddBlockTooHigh(t *testing.T) {
 	bc := newBlockchainWithGenesis(t)
 
-	assert.Nil(t, bc.AddBlock(randomBlockSigned(t, 1, getPrevBlockHash(t, bc, uint32(1)))))
-	assert.NotNil(t, bc.AddBlock(randomBlockSigned(t, 10, types.Hash{})))
+	assert.Nil(t, bc.AddBlock(randomBlock(t, 1, getPrevBlockHash(t, bc, uint32(1)))))
+	assert.NotNil(t, bc.AddBlock(randomBlock(t, 10, types.Hash{})))
 }
 
 func newBlockchainWithGenesis(t *testing.T) *Blockchain {
-	bc, err := NewBlockchain(randomBlock(0, types.Hash{}))
+	bc, err := NewBlockchain(log.NewNopLogger(), randomBlock(t, 0, types.Hash{}))
 	assert.Nil(t, err)
 
 	return bc

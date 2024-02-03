@@ -13,9 +13,6 @@ type TransactionWithoutPublicKey struct {
 
 	// cached
 	hash types.Hash
-
-	// timestamp
-	firstSeenOn int64
 }
 
 type Transaction struct {
@@ -69,12 +66,4 @@ func (tx *Transaction) Decode(dec Decoder[*Transaction]) error {
 
 func (tx *Transaction) Encode(enc Encoder[*Transaction]) error {
 	return enc.Encode(tx)
-}
-
-func (tx *Transaction) SetFirstSeenOn(t int64) {
-	tx.firstSeenOn = t
-}
-
-func (tx *Transaction) FirstSeenOn() int64 {
-	return tx.firstSeenOn
 }
